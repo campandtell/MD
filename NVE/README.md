@@ -1,56 +1,40 @@
 # Molecular Dynamics NVE Simulation Protocol
 A comprehensive guide for running NVE (microcanonical ensemble) molecular dynamics simulations using AMBER on HPC clusters.
 
-## Table of Contents
-- [Prerequisites](#prerequisites)
-- [Initial Setup](#initial-setup)
-- [System Minimization](#system-minimization)
-- [System Heating](#system-heating)
-- [NVE Equilibration](#nve-equilibration)
-- [Production Runs](#production-runs)
-- [Analysis Tools](#analysis-tools)
-- [Troubleshooting](#troubleshooting)
-
-## Prerequisites
-- AMBER (version 22 or later)
-- Access to HPC cluster with GPU capabilities
-- Initial PDB structure
-- Python with MDAnalysis (for analysis)
-
-## Initial Setup
-Create your working directory and copy your PDB file:
+## Directory Setup
 ```bash
-cd /scratch/YOUR_USERNAME
-mkdir -pv nve_simulation
+mkdir -p nve_simulation/{scripts,inputs,outputs}
 cd nve_simulation
-cp /path/to/your/protein.pdb ./1efa.pdb
 ```
 
-### System Preparation (tleap)
-Create `tleap.in`:
+## Step 1: Initial System Setup
+
+### Create tleap input
 ```bash
+cat > inputs/tleap.in << 'EOF'
 source leaprc.protein.ff14SB
 source leaprc.water.tip3p
-pdb_file = loadpdb 1efa.pdb
+pdb_file = loadpdb 1btl.pdb
 solvateBox pdb_file TIP3PBOX 16.0
 charge pdb_file
 addions pdb_file Na+ 0
 addions pdb_file Cl- 0
-saveAmberParm pdb_file 1efa.parm7 1efa.crd
+saveAmberParm pdb_file 1btl.parm7 1btl.crd
 quit
+EOF
 ```
 
-Run tleap (make sure to load your HPC's version of amber22 or higher):
+Run tleap:
 ```bash
 module load amber/22v3
-tleap -f tleap.in
+tleap -f inputs/tleap.in
 ```
 
-## System Minimization
+## Step 2: Solvent Minimization
 
-### Step 1: Solvent Minimization
-Create `minimization_solvent.in`:
+### Create minimization input
 ```bash
+cat > inputs/minimization_solvent.in << 'EOF'
 # Energy minimization solvent
 &cntrl
 imin=1,
@@ -66,16 +50,44 @@ ntb=1,
 cut=12.0,
 &end
 /
+EOF
 ```
 
-Submit solvent minimization:
+### Create submission script
 ```bash
-sbatch minimization_solvent_sbatch
+cat > scripts/minimization_solvent_sbatch << 'EOF'
+#!/usr/bin/env bash
+#SBATCH -n 8
+#SBATCH -p general
+#SBATCH -t 7-00:00:00
+#SBATCH -o slurm.%j.out
+#SBATCH -e slurm.%j.err
+
+module load amber/22v3
+
+mpiexec.hydra -n 8 pmemd.MPI -O \
+-i inputs/minimization_solvent.in \
+-o outputs/minimization_solvent.out \
+-p 1btl.parm7 \
+-c 1btl.crd \
+-r outputs/1btl_minimization_solvent.rst7 \
+-x outputs/1btl_minimization_solvent.crd \
+-ref 1btl.crd
+EOF
+
+chmod +x scripts/minimization_solvent_sbatch
 ```
 
-### Step 2: Full System Minimization
-Create `minimization_solution.in`:
+Submit job:
 ```bash
+sbatch scripts/minimization_solvent_sbatch
+```
+
+## Step 3: Full System Minimization
+
+### Create minimization input
+```bash
+cat > inputs/minimization_solution.in << 'EOF'
 # Energy minimization solution
 &cntrl
 imin=1,
@@ -88,16 +100,43 @@ ntb=1,
 cut=12.0,
 &end
 /
+EOF
 ```
 
-Submit full minimization:
+### Create submission script
 ```bash
-sbatch minimization_solution_sbatch
+cat > scripts/minimization_solution_sbatch << 'EOF'
+#!/usr/bin/env bash
+#SBATCH -n 8
+#SBATCH -p general
+#SBATCH -t 7-00:00:00
+#SBATCH -o slurm.%j.out
+#SBATCH -e slurm.%j.err
+
+module load amber/22v3
+
+mpiexec.hydra -n 8 pmemd.MPI -O \
+-i inputs/minimization_solution.in \
+-o outputs/minimization_solution.out \
+-p 1btl.parm7 \
+-c outputs/1btl_minimization_solvent.rst7 \
+-r outputs/1btl_minimization_solution.rst7 \
+-x outputs/1btl_minimization_solution.crd
+EOF
+
+chmod +x scripts/minimization_solution_sbatch
 ```
 
-## System Heating
-Create `heatup_nve.in`:
+Submit job:
 ```bash
+sbatch scripts/minimization_solution_sbatch
+```
+
+## Step 4: System Heating
+
+### Create heating input
+```bash
+cat > inputs/heatup_nve.in << 'EOF'
 # NVE-preparatory heating
 &cntrl
 imin=0,
@@ -125,18 +164,45 @@ cut=12.0,
 ioutfm=1,
 &end
 /
+EOF
 ```
 
-Key differences for NVE preparation:
-- Constant volume heating (ntb=1)
-- Longer duration (200ps)
-- Velocity output enabled (ntwv=500)
-- Reduced Langevin coupling (gamma_ln=1.0)
-- More frequent output for monitoring
-
-## NVE Equilibration
-Create `equilibration_nve.in`:
+### Create submission script
 ```bash
+cat > scripts/heatup_nve_sbatch << 'EOF'
+#!/usr/bin/env bash
+#SBATCH -n 8
+#SBATCH -p general
+#SBATCH -t 7-00:00:00
+#SBATCH -o slurm.%j.out
+#SBATCH -e slurm.%j.err
+
+module load amber/22v3
+
+mpiexec.hydra -n 8 pmemd.MPI -O \
+-i inputs/heatup_nve.in \
+-o outputs/heatup_nve.out \
+-p 1btl.parm7 \
+-c outputs/1btl_minimization_solution.rst7 \
+-r outputs/1btl_heatup_nve.rst7 \
+-x outputs/1btl_heatup_nve.nc \
+-v outputs/1btl_heatup_nve.vel \
+-ref outputs/1btl_minimization_solution.rst7
+EOF
+
+chmod +x scripts/heatup_nve_sbatch
+```
+
+Submit job:
+```bash
+sbatch scripts/heatup_nve_sbatch
+```
+
+## Step 5: NVE Equilibration
+
+### Create equilibration input
+```bash
+cat > inputs/equilibration_nve.in << 'EOF'
 # Initial NVE equilibration
 &cntrl
 imin=0,
@@ -159,19 +225,44 @@ cut=12.0,
 ioutfm=1,
 &end
 /
+EOF
 ```
 
-Important considerations:
-- No temperature coupling (ntt=0)
-- Constant volume (ntb=1)
-- Frequent output for monitoring stability
-- Monitor total energy conservation
-
-## Production Runs
-
-### CPU Production
-Create `production_nve_cpu.in`:
+### Create submission script
 ```bash
+cat > scripts/equilibration_nve_sbatch << 'EOF'
+#!/usr/bin/env bash
+#SBATCH -n 8
+#SBATCH -p general
+#SBATCH -t 7-00:00:00
+#SBATCH -o slurm.%j.out
+#SBATCH -e slurm.%j.err
+
+module load amber/22v3
+
+mpiexec.hydra -n 8 pmemd.MPI -O \
+-i inputs/equilibration_nve.in \
+-o outputs/equilibration_nve.out \
+-p 1btl.parm7 \
+-c outputs/1btl_heatup_nve.rst7 \
+-r outputs/1btl_equilibration_nve.rst7 \
+-x outputs/1btl_equilibration_nve.nc \
+-v outputs/1btl_equilibration_nve.vel
+EOF
+
+chmod +x scripts/equilibration_nve_sbatch
+```
+
+Submit job:
+```bash
+sbatch scripts/equilibration_nve_sbatch
+```
+
+## Step 6: CPU Production
+
+### Create production input
+```bash
+cat > inputs/production_nve_cpu.in << 'EOF'
 # CPU NVE production
 &cntrl
 imin=0,
@@ -194,11 +285,44 @@ cut=12.0,
 ioutfm=1,
 &end
 /
+EOF
 ```
 
-### GPU Production
-Create `production_nve_gpu.in`:
+### Create submission script
 ```bash
+cat > scripts/production_nve_cpu_sbatch << 'EOF'
+#!/usr/bin/env bash
+#SBATCH -n 8
+#SBATCH -p general
+#SBATCH -t 7-00:00:00
+#SBATCH -o slurm.%j.out
+#SBATCH -e slurm.%j.err
+
+module load amber/22v3
+
+mpiexec.hydra -n 8 pmemd.MPI -O \
+-i inputs/production_nve_cpu.in \
+-o outputs/production_nve_cpu.out \
+-p 1btl.parm7 \
+-c outputs/1btl_equilibration_nve.rst7 \
+-r outputs/1btl_production_nve_cpu.rst7 \
+-x outputs/1btl_production_nve_cpu.nc \
+-v outputs/1btl_production_nve_cpu.vel
+EOF
+
+chmod +x scripts/production_nve_cpu_sbatch
+```
+
+Submit job:
+```bash
+sbatch scripts/production_nve_cpu_sbatch
+```
+
+## Step 7: GPU Production
+
+### Create production input
+```bash
+cat > inputs/production_nve_gpu.in << 'EOF'
 # GPU NVE production - 20ns
 &cntrl
 imin=0,
@@ -221,64 +345,69 @@ cut=12.0,
 ioutfm=1,
 &end
 /
+EOF
 ```
 
-## Analysis Tools
-
-### Energy Conservation Check
-Create an energy analysis script `check_energy.cpptraj`:
+### Create submission script
 ```bash
-parm 1efa.parm7
-trajin 1efa_production_nve_gpu.nc
-energy output energy.dat
-run
+cat > scripts/production_nve_gpu_sbatch << 'EOF'
+#!/usr/bin/env bash
+#SBATCH -N 1
+#SBATCH -n 6
+#SBATCH -G 1
+#SBATCH -p general
+#SBATCH -t 1-00:00:00
+#SBATCH -o slurm.%j.out
+#SBATCH -e slurm.%j.err
+
+module load amber/22v3
+
+pmemd.cuda -O \
+-i inputs/production_nve_gpu.in \
+-o outputs/production_nve_gpu.out \
+-p 1btl.parm7 \
+-c outputs/1btl_production_nve_cpu.rst7 \
+-r outputs/1btl_production_nve_gpu.rst7 \
+-x outputs/1btl_production_nve_gpu.nc \
+-v outputs/1btl_production_nve_gpu.vel
+EOF
+
+chmod +x scripts/production_nve_gpu_sbatch
 ```
 
-Run analysis:
+Submit job:
 ```bash
-cpptraj -i check_energy.cpptraj
+sbatch scripts/production_nve_gpu_sbatch
 ```
 
-### Trajectory Clustering
-Save the provided clustering script as `cluster_traj.py` and run:
+## Monitoring Jobs
+Check job status:
 ```bash
-./cluster_traj.py --traj 1efa_production_nve_gpu.nc --top 1efa.parm7 --rmsd 2.5 --frames 1000
+squeue -u $USER
 ```
 
-## Troubleshooting
-
-### Common Issues and Solutions
-
-1. **Energy Conservation Problems**
-   - Check for appropriate timestep (dt)
-   - Verify minimization was complete
-   - Ensure heating was stable
-   - Consider longer equilibration
-
-2. **Temperature Drift**
-   - Extend heating phase
-   - Reduce Langevin coupling during heating
-   - Check for bad contacts in structure
-
-3. **Simulation Crashes**
-   - Verify box size is appropriate
-   - Check for bad contacts
-   - Ensure proper neutralization
-   - Review restart files for anomalies
-
-### Quality Control Metrics
-
-Monitor these values throughout your simulation:
-- Total energy conservation (should be < 0.01% drift)
-- Temperature stability (should be ±5K around target)
-- System density (should be ~1.0 g/cm³)
-- RMSD from starting structure
-- Velocity distribution (should be Maxwell-Boltzmann)
-
-## Notes
-- Always check energy conservation before proceeding to production
-- Save velocities for complete phase space analysis
-- Consider running multiple replicates
-- Monitor system properties regularly during production
-
-For additional help, consult the AMBER manual or contact your HPC support team.
+## Directory Structure
+After setup, your directory should look like:
+```
+nve_simulation/
+├── 1btl.pdb
+├── 1btl.parm7
+├── 1btl.crd
+├── inputs/
+│   ├── tleap.in
+│   ├── minimization_solvent.in
+│   ├── minimization_solution.in
+│   ├── heatup_nve.in
+│   ├── equilibration_nve.in
+│   ├── production_nve_cpu.in
+│   └── production_nve_gpu.in
+├── outputs/
+│   └── (simulation outputs will appear here)
+└── scripts/
+    ├── minimization_solvent_sbatch
+    ├── minimization_solution_sbatch
+    ├── heatup_nve_sbatch
+    ├── equilibration_nve_sbatch
+    ├── production_nve_cpu_sbatch
+    └── production_nve_gpu_sbatch
+```
