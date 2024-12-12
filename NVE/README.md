@@ -40,12 +40,12 @@ cd nve_simulation
 cat > inputs/tleap.in << 'EOF'
 source leaprc.protein.ff14SB
 source leaprc.water.tip3p
-pdb_file = loadpdb 1btl.pdb
+pdb_file = loadpdb 1efa.pdb
 solvateBox pdb_file TIP3PBOX 16.0
 charge pdb_file
 addions pdb_file Na+ 0
 addions pdb_file Cl- 0
-saveAmberParm pdb_file 1btl.parm7 1btl.crd
+saveAmberParm pdb_file 1efa.parm7 1efa.crd
 quit
 EOF
 ```
@@ -94,11 +94,11 @@ module load amber/22v3
 mpiexec.hydra -n 8 pmemd.MPI -O \
 -i inputs/minimization_solvent.in \
 -o outputs/minimization_solvent.out \
--p 1btl.parm7 \
--c 1btl.crd \
--r outputs/1btl_minimization_solvent.rst7 \
--x outputs/1btl_minimization_solvent.crd \
--ref 1btl.crd
+-p 1efa.parm7 \
+-c 1efa.crd \
+-r outputs/1efa_minimization_solvent.rst7 \
+-x outputs/1efa_minimization_solvent.crd \
+-ref 1efa.crd
 EOF
 
 chmod +x scripts/minimization_solvent_sbatch
@@ -144,10 +144,10 @@ module load amber/22v3
 mpiexec.hydra -n 8 pmemd.MPI -O \
 -i inputs/minimization_solution.in \
 -o outputs/minimization_solution.out \
--p 1btl.parm7 \
--c outputs/1btl_minimization_solvent.rst7 \
--r outputs/1btl_minimization_solution.rst7 \
--x outputs/1btl_minimization_solution.crd
+-p 1efa.parm7 \
+-c outputs/1efa_minimization_solvent.rst7 \
+-r outputs/1efa_minimization_solution.rst7 \
+-x outputs/1efa_minimization_solution.crd
 EOF
 
 chmod +x scripts/minimization_solution_sbatch
@@ -208,12 +208,12 @@ module load amber/22v3
 mpiexec.hydra -n 8 pmemd.MPI -O \
 -i inputs/heatup_nve.in \
 -o outputs/heatup_nve.out \
--p 1btl.parm7 \
--c outputs/1btl_minimization_solution.rst7 \
--r outputs/1btl_heatup_nve.rst7 \
--x outputs/1btl_heatup_nve.nc \
--v outputs/1btl_heatup_nve.vel \
--ref outputs/1btl_minimization_solution.rst7
+-p 1efa.parm7 \
+-c outputs/1efa_minimization_solution.rst7 \
+-r outputs/1efa_heatup_nve.rst7 \
+-x outputs/1efa_heatup_nve.nc \
+-v outputs/1efa_heatup_nve.vel \
+-ref outputs/1efa_minimization_solution.rst7
 EOF
 
 chmod +x scripts/heatup_nve_sbatch
@@ -269,11 +269,11 @@ module load amber/22v3
 mpiexec.hydra -n 8 pmemd.MPI -O \
 -i inputs/equilibration_nve.in \
 -o outputs/equilibration_nve.out \
--p 1btl.parm7 \
--c outputs/1btl_heatup_nve.rst7 \
--r outputs/1btl_equilibration_nve.rst7 \
--x outputs/1btl_equilibration_nve.nc \
--v outputs/1btl_equilibration_nve.vel
+-p 1efa.parm7 \
+-c outputs/1efa_heatup_nve.rst7 \
+-r outputs/1efa_equilibration_nve.rst7 \
+-x outputs/1efa_equilibration_nve.nc \
+-v outputs/1efa_equilibration_nve.vel
 EOF
 
 chmod +x scripts/equilibration_nve_sbatch
@@ -329,11 +329,11 @@ module load amber/22v3
 mpiexec.hydra -n 8 pmemd.MPI -O \
 -i inputs/production_nve_cpu.in \
 -o outputs/production_nve_cpu.out \
--p 1btl.parm7 \
--c outputs/1btl_equilibration_nve.rst7 \
--r outputs/1btl_production_nve_cpu.rst7 \
--x outputs/1btl_production_nve_cpu.nc \
--v outputs/1btl_production_nve_cpu.vel
+-p 1efa.parm7 \
+-c outputs/1efa_equilibration_nve.rst7 \
+-r outputs/1efa_production_nve_cpu.rst7 \
+-x outputs/1efa_production_nve_cpu.nc \
+-v outputs/1efa_production_nve_cpu.vel
 EOF
 
 chmod +x scripts/production_nve_cpu_sbatch
@@ -391,11 +391,11 @@ module load amber/22v3
 pmemd.cuda -O \
 -i inputs/production_nve_gpu.in \
 -o outputs/production_nve_gpu.out \
--p 1btl.parm7 \
--c outputs/1btl_production_nve_cpu.rst7 \
--r outputs/1btl_production_nve_gpu.rst7 \
--x outputs/1btl_production_nve_gpu.nc \
--v outputs/1btl_production_nve_gpu.vel
+-p 1efa.parm7 \
+-c outputs/1efa_production_nve_cpu.rst7 \
+-r outputs/1efa_production_nve_gpu.rst7 \
+-x outputs/1efa_production_nve_gpu.nc \
+-v outputs/1efa_production_nve_gpu.vel
 EOF
 
 chmod +x scripts/production_nve_gpu_sbatch
@@ -416,9 +416,9 @@ squeue -u $USER
 After setup, your directory should look like:
 ```
 nve_simulation/
-├── 1btl.pdb
-├── 1btl.parm7
-├── 1btl.crd
+├── 1efa.pdb
+├── 1efa.parm7
+├── 1efa.crd
 ├── inputs/
 │   ├── tleap.in
 │   ├── minimization_solvent.in
