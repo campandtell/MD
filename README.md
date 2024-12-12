@@ -23,7 +23,7 @@ Create your working directory and copy your PDB file:
 cd /scratch/YOUR_USERNAME
 mkdir -pv nve_simulation
 cd nve_simulation
-cp /path/to/your/protein.pdb ./1btl.pdb
+cp /path/to/your/protein.pdb ./1efa.pdb
 ```
 
 ### System Preparation (tleap)
@@ -31,12 +31,12 @@ Create `tleap.in`:
 ```bash
 source leaprc.protein.ff14SB
 source leaprc.water.tip3p
-pdb_file = loadpdb 1btl.pdb
+pdb_file = loadpdb 1efa.pdb
 solvateBox pdb_file TIP3PBOX 16.0
 charge pdb_file
 addions pdb_file Na+ 0
 addions pdb_file Cl- 0
-saveAmberParm pdb_file 1btl.parm7 1btl.crd
+saveAmberParm pdb_file 1efa.parm7 1efa.crd
 quit
 ```
 
@@ -228,8 +228,8 @@ ioutfm=1,
 ### Energy Conservation Check
 Create an energy analysis script `check_energy.cpptraj`:
 ```bash
-parm 1btl.parm7
-trajin 1btl_production_nve_gpu.nc
+parm 1efa.parm7
+trajin 1efa_production_nve_gpu.nc
 energy output energy.dat
 run
 ```
@@ -242,7 +242,7 @@ cpptraj -i check_energy.cpptraj
 ### Trajectory Clustering
 Save the provided clustering script as `cluster_traj.py` and run:
 ```bash
-./cluster_traj.py --traj 1btl_production_nve_gpu.nc --top 1btl.parm7 --rmsd 2.5 --frames 1000
+./cluster_traj.py --traj 1efa_production_nve_gpu.nc --top 1efa.parm7 --rmsd 2.5 --frames 1000
 ```
 
 ## Troubleshooting
