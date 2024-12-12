@@ -40,7 +40,7 @@ saveAmberParm pdb_file 1efa.parm7 1efa.crd
 quit
 ```
 
-Run tleap:
+Run tleap (make sure to load your HPC's version of amber22 or higher):
 ```bash
 module load amber/22v3
 tleap -f tleap.in
