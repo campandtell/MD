@@ -1,6 +1,32 @@
 # Molecular Dynamics NVE Simulation Protocol
 A comprehensive guide for running NVE (microcanonical ensemble) molecular dynamics simulations using AMBER on HPC clusters.
 
+## Table of Contents
+1. [Directory Setup](#directory-setup)
+2. [Initial System Setup](#step-1-initial-system-setup)
+   - [Create tleap input](#create-tleap-input)
+   - [Run tleap](#run-tleap)
+3. [Solvent Minimization](#step-2-solvent-minimization)
+   - [Create minimization input](#create-minimization-input)
+   - [Create submission script](#create-submission-script)
+4. [Full System Minimization](#step-3-full-system-minimization)
+   - [Create minimization input](#create-minimization-input-1)
+   - [Create submission script](#create-submission-script-1)
+5. [System Heating](#step-4-system-heating)
+   - [Create heating input](#create-heating-input)
+   - [Create submission script](#create-submission-script-2)
+6. [NVE Equilibration](#step-5-nve-equilibration)
+   - [Create equilibration input](#create-equilibration-input)
+   - [Create submission script](#create-submission-script-3)
+7. [CPU Production](#step-6-cpu-production)
+   - [Create production input](#create-production-input)
+   - [Create submission script](#create-submission-script-4)
+8. [GPU Production](#step-7-gpu-production)
+   - [Create production input](#create-production-input-1)
+   - [Create submission script](#create-submission-script-5)
+9. [Monitoring Jobs](#monitoring-jobs)
+10. [Directory Structure](#directory-structure)
+
 ## Directory Setup
 ```bash
 mkdir -p nve_simulation/{scripts,inputs,outputs}
