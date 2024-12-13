@@ -38,13 +38,20 @@ cd nve_simulation
 ### Create tleap input
 ```bash
 cat > inputs/tleap.in << 'EOF'
+# Standard protein force field for AMBER
 source leaprc.protein.ff14SB
+# Water model parameters
 source leaprc.water.tip3p
+# Load PDB and create AMBER object
 pdb_file = loadpdb 1efa.pdb
+# Add water box with 16Å padding
 solvateBox pdb_file TIP3PBOX 16.0
+# Calculate the net charge
 charge pdb_file
+# Add neutralizing ions
 addions pdb_file Na+ 0
 addions pdb_file Cl- 0
+# Save topology and coordinates
 saveAmberParm pdb_file 1efa.parm7 1efa.crd
 quit
 EOF
@@ -63,17 +70,17 @@ tleap -f inputs/tleap.in
 cat > inputs/minimization_solvent.in << 'EOF'
 # Energy minimization solvent
 &cntrl
-imin=1,
-ntpr=10000,
-ntr=1,
-restraintmask='!(:WAT,Na+,Cl-)',
-restraint_wt=10.0,
-maxcyc=50000,
-ncyc=25000,
-ntc=1,
-ntf=1,
-ntb=1,
-cut=12.0,
+imin=1,              ! Turn on minimization
+ntpr=10000,          ! Print energies every 10000 steps
+ntr=1,               ! Turn on restraints
+restraintmask='!(:WAT,Na+,Cl-)', ! Restrain everything except water and ions
+restraint_wt=10.0,   ! Force constant for restraints (kcal/mol·Å²)
+maxcyc=50000,        ! Maximum number of minimization cycles
+ncyc=25000,          ! Number of steepest descent steps before switching to conjugate gradient
+ntc=1,               ! No SHAKE constraints
+ntf=1,               ! Complete force evaluation
+ntb=1,               ! Constant volume periodic boundary
+cut=12.0,            ! Nonbonded cutoff in Angstroms
 &end
 /
 EOF
@@ -116,14 +123,14 @@ sbatch scripts/minimization_solvent_sbatch
 cat > inputs/minimization_solution.in << 'EOF'
 # Energy minimization solution
 &cntrl
-imin=1,
-ntpr=10000,
-maxcyc=100000,
-ncyc=50000,
-ntc=1,
-ntf=1,
-ntb=1,
-cut=12.0,
+imin=1,              ! Turn on minimization
+ntpr=10000,          ! Print energies every 10000 steps
+maxcyc=100000,       ! Maximum number of minimization cycles
+ncyc=50000,          ! Number of steepest descent steps before switching to conjugate gradient
+ntc=1,               ! No SHAKE constraints
+ntf=1,               ! Complete force evaluation
+ntb=1,               ! Constant volume periodic boundary
+cut=12.0,            ! Nonbonded cutoff in Angstroms
 &end
 /
 EOF
@@ -165,29 +172,29 @@ sbatch scripts/minimization_solution_sbatch
 cat > inputs/heatup_nve.in << 'EOF'
 # NVE-preparatory heating
 &cntrl
-imin=0,
-ntx=1,
-irest=0,
-ntpr=500,
-ntwr=5000,
-iwrap=1,
-ntwx=500,
-ntwv=500,
-ntr=1,
-restraintmask='!(:WAT,Na+,Cl-)',
-restraint_wt=10.0,
-nstlim=100000,
-dt=0.002,
-ntt=3,
-temp0=300.0,
-tempi=0.0,
-ig=-1,
-gamma_ln=1.0,
-ntc=2,
-ntf=2,
-ntb=1,
-cut=12.0,
-ioutfm=1,
+imin=0,              ! Turn off minimization (run MD)
+ntx=1,               ! Read coordinates but not velocities
+irest=0,             ! Do not restart simulation (new velocities)
+ntpr=500,            ! Print energies every 500 steps
+ntwr=5000,           ! Write restart file every 5000 steps
+iwrap=1,             ! Wrap coordinates into primary box
+ntwx=500,            ! Write coordinates every 500 steps
+ntwv=500,            ! Write velocities every 500 steps
+ntr=1,               ! Turn on restraints
+restraintmask='!(:WAT,Na+,Cl-)', ! Restrain everything except water and ions
+restraint_wt=10.0,   ! Force constant for restraints (kcal/mol·Å²)
+nstlim=100000,       ! Number of MD steps (200ps total)
+dt=0.002,            ! Timestep (2fs)
+ntt=3,               ! Langevin thermostat
+temp0=300.0,         ! Target temperature (K)
+tempi=0.0,           ! Initial temperature (K)
+ig=-1,               ! Random seed for velocity initialization
+gamma_ln=1.0,        ! Collision frequency for thermostat (ps⁻¹)
+ntc=2,               ! Enable SHAKE for bonds with hydrogen
+ntf=2,               ! Omit forces for bonds with hydrogen
+ntb=1,               ! Constant volume periodic boundary
+cut=12.0,            ! Nonbonded cutoff in Angstroms
+ioutfm=1,            ! Binary NetCDF trajectory format
 &end
 /
 EOF
@@ -231,24 +238,24 @@ sbatch scripts/heatup_nve_sbatch
 cat > inputs/equilibration_nve.in << 'EOF'
 # Initial NVE equilibration
 &cntrl
-imin=0,
-ntx=5,
-irest=1,
-ntpr=500,
-ntwr=5000,
-iwrap=1,
-ntwx=500,
-ntwv=500,
-nstlim=50000,
-dt=0.002,
-ntt=0,
-temp0=300.0,
-ig=-1,
-ntc=2,
-ntf=2,
-ntb=1,
-cut=12.0,
-ioutfm=1,
+imin=0,              ! Turn off minimization (run MD)
+ntx=5,               ! Read coordinates and velocities
+irest=1,             ! Restart simulation
+ntpr=500,            ! Print energies every 500 steps
+ntwr=5000,           ! Write restart file every 5000 steps
+iwrap=1,             ! Wrap coordinates into primary box
+ntwx=500,            ! Write coordinates every 500 steps
+ntwv=500,            ! Write velocities every 500 steps
+nstlim=50000,        ! Number of MD steps (100ps total)
+dt=0.002,            ! Timestep (2fs)
+ntt=0,               ! No temperature control (NVE)
+temp0=300.0,         ! Reference temperature for initial velocities
+ig=-1,               ! Random seed for velocity initialization
+ntc=2,               ! Enable SHAKE for bonds with hydrogen
+ntf=2,               ! Omit forces for bonds with hydrogen
+ntb=1,               ! Constant volume periodic boundary
+cut=12.0,            ! Nonbonded cutoff in Angstroms
+ioutfm=1,            ! Binary NetCDF trajectory format
 &end
 /
 EOF
@@ -291,24 +298,24 @@ sbatch scripts/equilibration_nve_sbatch
 cat > inputs/production_nve_cpu.in << 'EOF'
 # CPU NVE production
 &cntrl
-imin=0,
-ntx=5,
-irest=1,
-ntpr=5000,
-ntwr=5000,
-iwrap=1,
-ntwx=5000,
-ntwv=5000,
-nstlim=50000,
-dt=0.002,
-ntt=0,
-temp0=300.0,
-ig=-1,
-ntc=2,
-ntf=2,
-ntb=1,
-cut=12.0,
-ioutfm=1,
+imin=0,              ! Turn off minimization (run MD)
+ntx=5,               ! Read coordinates and velocities
+irest=1,             ! Restart simulation
+ntpr=5000,           ! Print energies every 5000 steps
+ntwr=5000,           ! Write restart file every 5000 steps
+iwrap=1,             ! Wrap coordinates into primary box
+ntwx=5000,           ! Write coordinates every 5000 steps
+ntwv=5000,           ! Write velocities every 5000 steps
+nstlim=50000,        ! Number of MD steps (100ps total)
+dt=0.002,            ! Timestep (2fs)
+ntt=0,               ! No temperature control (NVE)
+temp0=300.0,         ! Reference temperature for scaling
+ig=-1,               ! Random seed for velocity initialization
+ntc=2,               ! Enable SHAKE for bonds with hydrogen
+ntf=2,               ! Omit forces for bonds with hydrogen
+ntb=1,               ! Constant volume periodic boundary
+cut=12.0,            ! Nonbonded cutoff in Angstroms
+ioutfm=1,            ! Binary NetCDF trajectory format
 &end
 /
 EOF
@@ -351,24 +358,24 @@ sbatch scripts/production_nve_cpu_sbatch
 cat > inputs/production_nve_gpu.in << 'EOF'
 # GPU NVE production - 20ns
 &cntrl
-imin=0,
-ntx=5,
-irest=1,
-ntpr=5000,
-ntwr=5000,
-iwrap=1,
-ntwx=5000,
-ntwv=5000,
-nstlim=10000000,
-dt=0.002,
-ntt=0,
-temp0=300.0,
-ig=-1,
-ntc=2,
-ntf=2,
-ntb=1,
-cut=12.0,
-ioutfm=1,
+imin=0,              ! Turn off minimization (run MD)
+ntx=5,               ! Read coordinates and velocities
+irest=1,             ! Restart simulation
+ntpr=5000,           ! Print energies every 5000 steps
+ntwr=5000,           ! Write restart file every 5000 steps
+iwrap=1,             ! Wrap coordinates into primary box
+ntwx=5000,           ! Write coordinates every 5000 steps
+ntwv=5000,           ! Write velocities every 5000 steps
+nstlim=10000000,     ! Number of MD steps (20ns total)
+dt=0.002,            ! Timestep (2fs)
+ntt=0,               ! No temperature control (NVE)
+temp0=300.0,         ! Reference temperature for scaling
+ig=-1,               ! Random seed for velocity initialization
+ntc=2,               ! Enable SHAKE for bonds with hydrogen
+ntf=2,               ! Omit forces for bonds with hydrogen
+ntb=1,               ! Constant volume periodic boundary
+cut=12.0,            ! Nonbonded cutoff in Angstroms
+ioutfm=1,            ! Binary NetCDF trajectory format
 &end
 /
 EOF
@@ -436,4 +443,3 @@ nve_simulation/
     ├── equilibration_nve_sbatch
     ├── production_nve_cpu_sbatch
     └── production_nve_gpu_sbatch
-```
