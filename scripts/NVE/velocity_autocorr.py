@@ -4,7 +4,6 @@ import numpy as np
 import sys
 import glob
 from pathlib import Path
-import argparse
 
 def get_com_velocities(atoms_obj, chunk_start, chunk_end):
     """Calculate center of mass velocities for given atom selection."""
@@ -24,7 +23,7 @@ def get_adjusted_vels_per_atom(atom_obj, com_vels, chunk_start, chunk_end):
     adj_vels = adj_vels - com_vels
     return adj_vels
 
-def get_correlation(Nw, dN, atom_obj, com_vels, chunk_start, chunk_end, cov_save):
+def get_correlation(Nf, Nw, dN, atom_obj, com_vels, chunk_start, chunk_end, cov_save):
     """Calculate velocity autocorrelation for a given atom."""
     adj_vels = get_adjusted_vels_per_atom(atom_obj, com_vels, chunk_start, chunk_end)
     cov = []
@@ -35,13 +34,13 @@ def get_correlation(Nw, dN, atom_obj, com_vels, chunk_start, chunk_end, cov_save
         init_vel = adj_vels[a]
         vel_chunk = adj_vels[a:a+Nw]
         if len(vel_chunk) != Nw:
-            print(f"Warning: Inconsistent chunk size at index {a}")
-            continue
+            print(a)
         cov.append(np.dot(vel_chunk, init_vel) / np.square(np.linalg.norm(init_vel)))
         a += dN
     
     avg_cov = np.mean(cov, axis=0)
-    np.save(f"{cov_save}_chunk_{chunk_start}_{chunk_end}.npy", avg_cov)
+    np.save(file=f"{cov_save}_chunk_{chunk_start}_{chunk_end}.npy", arr=avg_cov)
+    return
 
 def make_chunks(Nf, n_chunks):
     """Divide trajectory into chunks."""
@@ -49,62 +48,58 @@ def make_chunks(Nf, n_chunks):
     chunk_i.append(Nf)
     return chunk_i
 
-def main():
-    parser = argparse.ArgumentParser(description='Calculate velocity autocorrelation functions')
-    parser.add_argument('topology', help='Topology file (parm7)')
-    parser.add_argument('trajectory', help='Trajectory file (nc)')
-    parser.add_argument('--window', type=int, default=500, help='Window size for correlation')
-    parser.add_argument('--stride', type=int, default=1, help='Stride for correlation calculation')
-    parser.add_argument('--chunks', type=int, default=25, help='Number of chunks to divide trajectory')
-    args = parser.parse_args()
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("Usage: python vel_autocorr.py <pdb_file> <trajectory>")
+        sys.exit(1)
 
-    # Load trajectory
-    u = mda.Universe(args.topology, args.trajectory)
+    pdb_struct = sys.argv[1]
+    traj = sys.argv[2]
     
-    # Setup calculation parameters
-    Nw = args.window
-    dN = args.stride
-    Nf = len(u.trajectory)
+    # Load with PDB format
+    md1 = mda.Universe(pdb_struct, traj)
+    
+    # Parameters
+    Nw = 500  # window size
+    dN = 1    # stride
+    Nf = len(md1.trajectory)
     
     # Select alpha carbons
-    ca_obj = u.select_atoms("name CA")
+    ca_obj = md1.select_atoms("name CA")
     resi_list = ca_obj.residues.resids
+    N_res = len(resi_list)
     
-    # Create output directory
-    output_dir = Path('velcorr_output')
-    output_dir.mkdir(exist_ok=True)
-    
-    # Get chunks
-    chunk_i = make_chunks(Nf, args.chunks)
+    # Divide trajectory into 25 chunks
+    n_chunks = 25
+    chunk_i = make_chunks(Nf, n_chunks)
     
     # Check existing calculations
-    get_finished = list(output_dir.glob("*.npy"))
+    get_finished = glob.glob("*.npy")
     
     # Process each chunk
-    for i in range(len(chunk_i)-1):
+    for i in range(0, len(chunk_i)-1):
         chunk_start = chunk_i[i]
         chunk_end = chunk_i[i+1]
         
         # Check which residues need processing
         resi_to_run = []
-        for resid in resi_list:
-            cov_save = output_dir / f"velcorr_{resid}"
+        for i in resi_list:
+            cov_save = f"velcorr_{i}"
             name = f"{cov_save}_chunk_{chunk_start}_{chunk_end}.npy"
-            if not Path(name).exists():
-                resi_to_run.append(resid)
+            if name in get_finished:
+                continue
+            else:
+                resi_to_run.append(i)
         
-        if not resi_to_run:
+        if len(resi_to_run) == 0:
             continue
             
         # Calculate COM velocities once per chunk
         com_vels = get_com_velocities(ca_obj, chunk_start, chunk_end)
         
         # Process each residue
-        for resid in resi_to_run:
-            cov_save = output_dir / f"velcorr_{resid}"
-            atom_obj = u.select_atoms(f"name CA and resid {resid}")
-            get_correlation(Nw, dN, atom_obj, com_vels, chunk_start, chunk_end, cov_save)
-            print(f"Processed residue {resid} for chunk {chunk_start}-{chunk_end}")
-
-if __name__ == "__main__":
-    main()
+        for i in resi_to_run:
+            cov_save = f"velcorr_{i}"
+            name = f"{cov_save}_chunk_{chunk_start}_{chunk_end}.npy"
+            atom_obj = md1.select_atoms(f"name CA and resid {i}")
+            get_correlation(Nf, Nw, dN, atom_obj, com_vels, chunk_start, chunk_end, cov_save)
