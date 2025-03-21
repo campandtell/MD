@@ -743,7 +743,10 @@ def calc_dfi(pdbfile, pdbid=None, covar=None, ls_reschain=[], chain_name=None, V
     if not (covar):
         invHrs = calc_covariance(numres, x, y, z, Verbose=False)
     else:  # this is where we load the Hessian if provided
-        invHrs = np.loadtxt(covar)
+        try:
+            invHrs = np.loadtxt(covar)
+        except:
+            invHrs = np.load(covar)
 
     # RUN DFI
     directions = np.vstack(([1, 0, 0], [0, 1, 0], [0, 0, 1], [
